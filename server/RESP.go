@@ -1,38 +1,100 @@
 package server
 
 import (
-	"errors"
+	"fmt"
 )
 
-// reads a RESP encoded simple string from data and returns
-// the string, the delta, and the error
-func readSimpleString(data []byte) (string, int, error) {
-	// first character +
+func readSimpleString(data []byte) (string, int) {
+	fmt.Println("Reading Simple String...")
 	pos := 1
-	//loop until we find \r
-	for ; data[pos] != '\r'; pos++ {
-
+	for data[pos] != '\r' {
+		pos++
 	}
-
-	return string(data[1:pos]), pos + 2, nil
+	result := string(data[1:pos])
+	fmt.Printf("Simple String parsed: %q\n", result)
+	return result, pos + 2
 }
 
-func DecodeOne(data []byte) (interface{}, int, error) {
-	if len(data) == 0 {
-		return nil, 0, errors.New("no data")
+func readArray(data []byte) ([]interface{}, int) {
+	fmt.Println("Reading Array...")
+	pos := 1
+	// Read array length
+	strLen := 0
+	for data[pos] != '\r' {
+		strLen = strLen*10 + int(data[pos]-'0')
+		pos++
 	}
+	pos += 2 // Skip \r\n
+	fmt.Printf("Array length: %d\n", strLen)
+
+	var elems []interface{} = make([]interface{}, strLen)
+	for i := 0; i < strLen; i++ {
+		ele, delta := DecodeOne(data[pos:])
+		elems[i] = ele
+		pos += delta
+	}
+	fmt.Printf("Array parsed: %v\n", elems)
+	return elems, pos
+}
+
+func readBulkString(data []byte) (string, int) {
+	fmt.Println("Reading Bulk String...")
+	pos := 1
+	// Read string length
+	strLen := 0
+	for data[pos] != '\r' {
+		strLen = strLen*10 + int(data[pos]-'0')
+		pos++
+	}
+	pos += 2 // Skip \r\n after length
+	fmt.Printf("Bulk String length: %d\n", strLen)
+
+	// Extract the string
+	result := string(data[pos : pos+strLen])
+	pos += strLen + 2 // Skip string content + \r\n
+	fmt.Printf("Bulk String parsed: %q\n", result)
+	return result, pos
+}
+
+func readError(data []byte) (string, int) {
+	fmt.Println("Reading Error...")
+	result, delta := readSimpleString(data)
+	fmt.Printf("Error parsed: %q\n", result)
+	return result, delta
+}
+
+func readInt64(data []byte) (int64, int) {
+	fmt.Println("Reading Integer...")
+	pos := 1
+	var value int64 = 0
+	for data[pos] != '\r' {
+		value = value*10 + int64(data[pos]-'0')
+		pos++
+	}
+	fmt.Printf("Integer parsed: %d\n", value)
+	return value, pos + 2
+}
+
+func DecodeOne(data []byte) (interface{}, int) {
 	switch data[0] {
 	case '+':
 		return readSimpleString(data)
-
+	case '*':
+		return readArray(data)
+	case '$':
+		return readBulkString(data)
+	case '-':
+		return readError(data)
+	case ':':
+		return readInt64(data)
+	default:
+		fmt.Printf("Unknown RESP type: %c\n", data[0])
+		return string(data), len(data)
 	}
-	return nil, 0, nil
 }
 
-func RESPParser(data []byte) (interface{}, error) {
-	if len(data) == 0 {
-		return nil, errors.New("no data")
-	}
-	value, _, err := DecodeOne(data)
-	return value, err
+func RESPParser(data []byte) interface{} {
+	fmt.Printf("Parsing RESP data: %q\n", string(data))
+	value, _ := DecodeOne(data)
+	return value
 }

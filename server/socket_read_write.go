@@ -7,7 +7,7 @@ import (
 
 func ReadCommand(conn net.Conn) (string, error) {
 	readBuffer := make([]byte, 1024) // read 1KB data
-	//read is a blocking call
+	//read is a blocking call - waits until data arrives
 	n, err := conn.Read(readBuffer)
 	if err != nil {
 		return "", err
@@ -16,22 +16,23 @@ func ReadCommand(conn net.Conn) (string, error) {
 		fmt.Println("No data read")
 		return "", nil
 	}
-	// Fix: Handle interface{} return from RESPParser
-	value, err := RESPParser(readBuffer[:n])
-	if err != nil {
-		return "", err
-	}
 
-	// Type assertion to convert interface{} to string
-	if str, ok := value.(string); ok {
-		return str, nil
-	}
-	// Fallback: convert any type to string
-	return fmt.Sprintf("%v", value), nil
+	fmt.Printf("Raw data received: %q\n", string(readBuffer[:n]))
+
+	// Parse with simplified RESP parser
+	value := RESPParser(readBuffer[:n])
+
+	// Convert to string for response
+	result := fmt.Sprintf("%v", value)
+	fmt.Printf("Final result: %q\n", result)
+	return result, nil
 }
 
 func Respond(conn net.Conn, command string) error {
-	_, err := conn.Write([]byte(command))
+	// Send RESP Simple String response
+	// Send simple OK response
+	response := "+OK\r\n"
+	_, err := conn.Write([]byte(response))
 	if err != nil {
 		return err
 	}
