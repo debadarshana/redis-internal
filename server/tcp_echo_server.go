@@ -27,21 +27,21 @@ func TcpEchoServer(config Config) {
 			panic(err)
 		}
 		concurrent_client++
-		fmt.Printf("Accepet conection: %v concurrent client : %v\n", conn.RemoteAddr(), concurrent_client)
+		// fmt.Printf("Accepet conection: %v concurrent client : %v\n", conn.RemoteAddr(), concurrent_client)
 		/* read the command and echo same to the server  continuously till client closed */
 		for {
 			command, err := ReadCommand(conn)
 			if err != nil {
 				/* EOF error recieved when client disconnected or close the session */
 				if err == io.EOF {
-					fmt.Println("clinet Disconnected ", conn.RemoteAddr())
+					// fmt.Println("clinet Disconnected ", conn.RemoteAddr())
 					concurrent_client--
-					fmt.Println("Closing the Current connection and ready to accept new client")
+					// fmt.Println("Closing the Current connection and ready to accept new client")
 					break
 				}
 				panic(err)
 			}
-			fmt.Println("command recived :", command)
+			// fmt.Println("command recived :", command)
 			//return the same string to the client
 			err = Respond(conn, command)
 			if err != nil {
