@@ -26,6 +26,13 @@ func Encode(value interface{}, isSimple bool) []byte {
 	// fmt.Println("Unknown type, returning empty")
 	return []byte{}
 }
+func evalECHO(Args []string) []byte {
+	if len(Args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'echo' command\r\n")
+	} else {
+		return Encode(Args[0], false)
+	}
+}
 
 func evalPING(Args []string) []byte {
 	// fmt.Printf("Evaluating PING command with %d args: %v\n", len(Args), Args)
@@ -50,6 +57,8 @@ func EvalAndResponse(Command *RedisCmd) []byte {
 	switch Command.Cmd {
 	case "PING":
 		return evalPING(Command.Args)
+	case "ECHO":
+		return evalECHO(Command.Args)
 	default:
 		// fmt.Printf("Command %s not supported\n", Command.Cmd)
 		return []byte(fmt.Sprintf("-ERR unknown command '%s'\r\n", Command.Cmd))

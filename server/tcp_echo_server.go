@@ -34,9 +34,9 @@ func TcpEchoServer(config Config) {
 			if err != nil {
 				/* EOF error recieved when client disconnected or close the session */
 				if err == io.EOF {
-					// fmt.Println("clinet Disconnected ", conn.RemoteAddr())
+					fmt.Println("clinet Disconnected ", conn.RemoteAddr())
 					concurrent_client--
-					// fmt.Println("Closing the Current connection and ready to accept new client")
+					fmt.Println("Closing the Current connection and ready to accept new client")
 					break
 				}
 				panic(err)
