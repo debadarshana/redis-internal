@@ -27,5 +27,6 @@ func main() {
 		Host: config.Host,
 		Port: config.Port,
 	}
-	server.TcpEchoServer(serverConfig)
+	//server.TcpEchoServer(serverConfig)
+	server.RunAsyncTCPServer(serverConfig)
 }

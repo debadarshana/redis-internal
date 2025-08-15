@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"time"
 )
 
 // RedisCmd represents a parsed Redis command
@@ -25,6 +26,26 @@ func Encode(value interface{}, isSimple bool) []byte {
 	}
 	// fmt.Println("Unknown type, returning empty")
 	return []byte{}
+}
+func evalTIME(Args []string) []byte {
+	if len(Args) > 0 {
+		return []byte("-ERR wrong number of arguments for 'TIME' command\r\n")
+	}
+
+	now := time.Now()
+	seconds := now.Unix()
+	microseconds := now.Nanosecond() / 1000
+
+	// TIME command returns an array with 2 elements: [seconds, microseconds]
+	// Format: *2\r\n$len\r\nseconds\r\n$len\r\nmicroseconds\r\n
+	secondsStr := fmt.Sprintf("%d", seconds)
+	microsecondsStr := fmt.Sprintf("%d", microseconds)
+
+	result := fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
+		len(secondsStr), secondsStr,
+		len(microsecondsStr), microsecondsStr)
+
+	return []byte(result)
 }
 func evalECHO(Args []string) []byte {
 	if len(Args) != 1 {
@@ -59,6 +80,8 @@ func EvalAndResponse(Command *RedisCmd) []byte {
 		return evalPING(Command.Args)
 	case "ECHO":
 		return evalECHO(Command.Args)
+	case "TIME":
+		return evalTIME(Command.Args)
 	default:
 		// fmt.Printf("Command %s not supported\n", Command.Cmd)
 		return []byte(fmt.Sprintf("-ERR unknown command '%s'\r\n", Command.Cmd))

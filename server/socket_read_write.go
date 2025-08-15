@@ -1,13 +1,12 @@
 package server
 
 import (
-	"fmt"
-	"net"
+	"io"
 	"redis-internal/core"
 	"strings"
 )
 
-func ReadCommand(conn net.Conn) (*core.RedisCmd, error) {
+func ReadCommand(conn io.ReadWriter) (*core.RedisCmd, error) {
 	readBuffer := make([]byte, 1024) // read 1KB data
 	//read is a blocking call - waits until data arrives
 	n, err := conn.Read(readBuffer)
@@ -19,7 +18,7 @@ func ReadCommand(conn net.Conn) (*core.RedisCmd, error) {
 		return nil, nil
 	}
 
-	fmt.Printf("Raw command received: %q\n", string(readBuffer[:n]))
+	//fmt.Printf("Raw command received: %q\n", string(readBuffer[:n]))
 
 	// Parse with simplified RESP parser
 	tokens, err := core.DecodeCmd(readBuffer[:n])
@@ -36,11 +35,11 @@ func ReadCommand(conn net.Conn) (*core.RedisCmd, error) {
 
 //
 
-func Respond(conn net.Conn, Command *core.RedisCmd) error {
+func Respond(conn io.ReadWriter, Command *core.RedisCmd) error {
 	// Send RESP Simple String response
 	// Send simple OK response
 	response := core.EvalAndResponse(Command)
-	fmt.Printf("Raw response sent: %q\n", string(response))
+	//fmt.Printf("Raw response sent: %q\n", string(response))
 	_, err := conn.Write([]byte(response))
 	if err != nil {
 		return err
