@@ -4,14 +4,7 @@ A high-performance TCP server implementation in Go that handles Redis RESP (Redi
 
 ## Features
 
-- 🚀 **High-Performance Async Server**: Epoll-based event-driven I/O supporting 20,000+ concurrent clients
-- 📡 **Full RESP Protocol Support**: Complete Redis Serialization Protocol implementation (Simple Strings, Bulk Strings, Arrays, Integers, Errors)
-- ⚡ **Non-blocking I/O**: Zero-copy syscalls with optimized performance
-- 🔧 **Command-line Configuration**: Host and port configuration via flags
-- 👥 **Concurrent Client Management**: Real-time connection tracking and graceful disconnections
-- �️ **Redis Commands**: PING, ECHO, TIME commands with proper Redis protocol compliance
-- 🏗️ **Modular Architecture**: Clean separation between core logic and server implementation
-- 🔄 **Production Ready**: SO_REUSEADDR, proper error handling, and resource cleanup
+
 
 ## Project Structure
 
@@ -161,7 +154,7 @@ localhost:7379> INVALID
 ### Prerequisites
 - **Go**: Version 1.16 or higher
 - **Network**: TCP connection capability
-- **OS**: Linux, macOS, or Windows
+- **OS**: Linux
 
 ### Code Architecture
 
