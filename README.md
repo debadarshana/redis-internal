@@ -1,6 +1,6 @@
 # Redis Internal - High-Performance TCP Server
 
-A high-performance TCP server implementation in Go that handles Redis RESP (Redis Serialization Protocol) format with async I/O and epoll-based event handling for production workloads.
+A async TCP server implementation in Go that handles Redis RESP (Redis Serialization Protocol) format with async I/O and epoll-based event handling for production workloads.
 
 ## Features
 
