@@ -2,8 +2,13 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
+
+/* implement OK and NIL */
+var RESP_OK []byte = []byte("+OK\r\n")
+var RESP_NIL []byte = []byte("$-1\r\n")
 
 // RedisCmd represents a parsed Redis command
 type RedisCmd struct {
@@ -23,9 +28,80 @@ func Encode(value interface{}, isSimple bool) []byte {
 		result := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
 		// fmt.Printf("Encoded as Bulk String: %q\n", string(result))
 		return result
+	case int64:
+		result := []byte(fmt.Sprintf(":%d\r\n", v))
+		return result
 	}
 	// fmt.Println("Unknown type, returning empty")
 	return []byte{}
+}
+func evalTTL(Args []string) []byte {
+	if len(Args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'TTL' command\r\n")
+	}
+	var key string = Args[0]
+
+	obj := Get(key)
+
+	if obj == nil {
+		return []byte(":-2\r\n")
+	}
+	if obj.ExpiresAt == -1 {
+		return []byte(":-1\r\n")
+	}
+
+	durationMS := obj.ExpiresAt - time.Now().UnixMilli()
+
+	if durationMS < 0 {
+		return []byte(":-2\r\n")
+	}
+	return Encode(durationMS/1000, false)
+}
+func evalGET(Args []string) []byte {
+	if len(Args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'GET' command\r\n")
+	}
+	var key string = Args[0]
+
+	//Get the object
+	obj := Get(key)
+	// key not exist
+
+	if obj == nil {
+		return RESP_NIL
+	}
+	return Encode(obj.Value, false)
+}
+func evalSET(Args []string) []byte {
+	//check the size
+	if len(Args) <= 1 {
+		return []byte("-ERR wrong number of arguments for 'SET' command\r\n")
+	}
+
+	key, value := Args[0], Args[1]
+	var exDurationMs int64 = -1
+	for i := 2; i < len(Args); i++ {
+		switch Args[i] {
+		case "EX", "ex":
+			i++
+			if i == len(Args) {
+				// means no argument provided for EX time
+				return []byte("-ERR syntax error\r\n")
+			}
+			//calculate the expiration time and change to ms
+			exSeconds, err := strconv.ParseInt(Args[i], 10, 64)
+			if err != nil {
+				return []byte("-ERR value is not an integer or out of range\r\n")
+			}
+			exDurationMs = exSeconds * 1000 //convert to ms
+		default:
+			return []byte(fmt.Sprintf("-ERR unknown Argument '%s'\r\n", Args[i]))
+			//store the k,v pair
+		}
+	}
+	Put(key, NewObj(value, exDurationMs))
+	return RESP_OK
+
 }
 func evalTIME(Args []string) []byte {
 	if len(Args) > 0 {
@@ -82,6 +158,12 @@ func EvalAndResponse(Command *RedisCmd) []byte {
 		return evalECHO(Command.Args)
 	case "TIME":
 		return evalTIME(Command.Args)
+	case "SET":
+		return evalSET(Command.Args)
+	case "GET":
+		return evalGET(Command.Args)
+	case "TTL":
+		return evalTTL(Command.Args)
 	default:
 		// fmt.Printf("Command %s not supported\n", Command.Cmd)
 		return []byte(fmt.Sprintf("-ERR unknown command '%s'\r\n", Command.Cmd))
