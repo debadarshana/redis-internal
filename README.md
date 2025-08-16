@@ -80,6 +80,18 @@ printf "*2\r\n\$4\r\nECHO\r\n\$5\r\nhello\r\n" | nc localhost 7379
 
 # TIME command
 printf "*1\r\n\$4\r\nTIME\r\n" | nc localhost 7379
+
+# SET command
+printf "*3\r\n\$3\r\nSET\r\n\$3\r\nkey\r\n\$5\r\nvalue\r\n" | nc localhost 7379
+
+# SET command with expiration
+printf "*5\r\n\$3\r\nSET\r\n\$3\r\nkey\r\n\$5\r\nvalue\r\n\$2\r\nEX\r\n\$2\r\n10\r\n" | nc localhost 7379
+
+# GET command
+printf "*2\r\n\$3\r\nGET\r\n\$3\r\nkey\r\n" | nc localhost 7379
+
+# TTL command
+printf "*2\r\n\$3\r\nTTL\r\n\$3\r\nkey\r\n" | nc localhost 7379
 ```
 
 ## RESP Protocol Implementation
@@ -97,6 +109,9 @@ printf "*1\r\n\$4\r\nTIME\r\n" | nc localhost 7379
 - **PING**: Returns PONG or echoes argument
 - **ECHO**: Returns the provided string
 - **TIME**: Returns Unix timestamp and microseconds
+- **SET**: Store key-value pairs with optional expiration (EX parameter)
+- **GET**: Retrieve values by key, returns nil if key doesn't exist or expired
+- **TTL**: Get time-to-live for keys in seconds (-1 for no expiry, -2 for non-existent)
 
 
 
@@ -145,6 +160,18 @@ localhost:7379> ECHO "Redis Internal"
 localhost:7379> TIME
 1) "1692123456"
 2) "123456"
+localhost:7379> SET mykey "Hello Redis"
+OK
+localhost:7379> GET mykey
+"Hello Redis"
+localhost:7379> SET tempkey "expires" EX 10
+OK
+localhost:7379> TTL tempkey
+(integer) 7
+localhost:7379> GET tempkey
+"expires"
+localhost:7379> TTL tempkey
+(integer) 4
 localhost:7379> INVALID
 (error) ERR unknown command 'INVALID'
 ```
@@ -224,12 +251,13 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 ECHO hello
 ###  **Completed Features**
 - **High-Performance Server**: Epoll-based async I/O for production workloads
 - **Complete RESP Protocol**: All Redis data types (Simple Strings, Bulk Strings, Arrays, Integers, Errors)
-- **Redis Commands**: PING, ECHO, TIME with proper protocol compliance
-- **Concurrent Connections**: Support  simultaneous clients
+- **Redis Commands**: PING, ECHO, TIME, SET, GET, TTL with proper protocol compliance
+- **Key Expiration**: Support for EX parameter in SET command with automatic cleanup
+- **Concurrent Connections**: Support for simultaneous clients
 
 
 ###  **Current Limitations**
-- **Limited Commands**: Only PING, ECHO, TIME implemented (Redis has 200+ commands)
+- **Limited Commands**: Only 6 basic commands implemented (Redis has 200+ commands)
 - **No Persistence**: Data is not stored (in-memory only)
 - **No Data Structures**: No support for Lists, Sets, Hashes, etc.
 - **No Authentication**: No AUTH command or security features
@@ -240,8 +268,10 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 ECHO hello
 ## Future Roadmap
 
 ### Phase 1: Core Redis Commands (In Progress)
-- [ ] **String Commands**: SET, GET, DEL, EXISTS, INCR, DECR
-- [ ] **Key Management**: EXPIRE, TTL, KEYS, TYPE
+- [x] **String Commands**: SET, GET (completed)
+- [x] **Key Management**: TTL (completed)
+- [ ] **String Commands**: DEL, EXISTS, INCR, DECR
+- [ ] **Key Management**: EXPIRE, KEYS, TYPE
 - [ ] **Database**: SELECT, FLUSHDB, FLUSHALL
 
 ### Phase 2: Advanced Data Structures
