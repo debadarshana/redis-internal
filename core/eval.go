@@ -28,12 +28,51 @@ func Encode(value interface{}, isSimple bool) []byte {
 		result := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
 		// fmt.Printf("Encoded as Bulk String: %q\n", string(result))
 		return result
-	case int64:
+	case int, int8, int16, int32, int64:
 		result := []byte(fmt.Sprintf(":%d\r\n", v))
 		return result
 	}
 	// fmt.Println("Unknown type, returning empty")
 	return []byte{}
+}
+func evalEXPIRE(Args []string) []byte {
+	//EXPIRE key time in sec
+	if len(Args) != 2 {
+		return []byte("-ERR wrong number of arguments for 'expire' command\r\n")
+	}
+	//Get the key,timeout duration
+	var key string = Args[0]
+	expireDurationSec, err := strconv.ParseInt(Args[1], 10, 64)
+	if err != nil {
+		return []byte("-ERR value is not an integer or out of range\r\n")
+	}
+
+	//get the key
+	obj := Get(key)
+	if obj == nil {
+		//return 0 if key is invalid
+		return Encode(0, false)
+	}
+	obj.ExpiresAt = time.Now().UnixMilli() + expireDurationSec*1000 //store in mili second
+
+	//return 1 success
+	return Encode(1, false)
+
+}
+func evalDEL(Args []string) []byte {
+	//DEL k1,k2,..
+	if len(Args) < 1 {
+		return []byte("-ERR wrong number of arguments for 'del' command\r\n")
+
+	}
+	var del_cnt int = 0
+	for i := 0; i < len(Args); i++ {
+		key := Args[i]
+		if Del(key) == true {
+			del_cnt++
+		}
+	}
+	return Encode(del_cnt, false)
 }
 func evalTTL(Args []string) []byte {
 	if len(Args) != 1 {
@@ -164,6 +203,10 @@ func EvalAndResponse(Command *RedisCmd) []byte {
 		return evalGET(Command.Args)
 	case "TTL":
 		return evalTTL(Command.Args)
+	case "DEL":
+		return evalDEL(Command.Args)
+	case "EXPIRE":
+		return evalEXPIRE(Command.Args)
 	default:
 		// fmt.Printf("Command %s not supported\n", Command.Cmd)
 		return []byte(fmt.Sprintf("-ERR unknown command '%s'\r\n", Command.Cmd))
