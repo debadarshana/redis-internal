@@ -92,6 +92,15 @@ printf "*2\r\n\$3\r\nGET\r\n\$3\r\nkey\r\n" | nc localhost 7379
 
 # TTL command
 printf "*2\r\n\$3\r\nTTL\r\n\$3\r\nkey\r\n" | nc localhost 7379
+
+# DEL command (single key)
+printf "*2\r\n\$3\r\nDEL\r\n\$3\r\nkey\r\n" | nc localhost 7379
+
+# DEL command (multiple keys)
+printf "*4\r\n\$3\r\nDEL\r\n\$4\r\nkey1\r\n\$4\r\nkey2\r\n\$4\r\nkey3\r\n" | nc localhost 7379
+
+# EXPIRE command
+printf "*3\r\n\$6\r\nEXPIRE\r\n\$3\r\nkey\r\n\$2\r\n60\r\n" | nc localhost 7379
 ```
 
 ## RESP Protocol Implementation
@@ -112,6 +121,8 @@ printf "*2\r\n\$3\r\nTTL\r\n\$3\r\nkey\r\n" | nc localhost 7379
 - **SET**: Store key-value pairs with optional expiration (EX parameter)
 - **GET**: Retrieve values by key, returns nil if key doesn't exist or expired
 - **TTL**: Get time-to-live for keys in seconds (-1 for no expiry, -2 for non-existent)
+- **DEL**: Delete one or more keys, returns number of keys deleted
+- **EXPIRE**: Set expiration time for a key in seconds, returns 1 if successful, 0 if key doesn't exist
 
 
 
@@ -172,6 +183,22 @@ localhost:7379> GET tempkey
 "expires"
 localhost:7379> TTL tempkey
 (integer) 4
+localhost:7379> SET another_key "test value"
+OK
+localhost:7379> EXPIRE another_key 30
+(integer) 1
+localhost:7379> TTL another_key
+(integer) 28
+localhost:7379> SET key1 "value1"
+OK
+localhost:7379> SET key2 "value2"
+OK
+localhost:7379> DEL key1
+(integer) 1
+localhost:7379> DEL key1 key2 nonexistent
+(integer) 1
+localhost:7379> GET key1
+(nil)
 localhost:7379> INVALID
 (error) ERR unknown command 'INVALID'
 ```
@@ -244,6 +271,9 @@ redis-cli -h localhost -p 7379 TIME
 # Test concurrent connections
 redis-benchmark -h localhost -p 7379 -c 100 -n 10000 PING
 redis-benchmark -h localhost -p 7379 -c 100 -n 10000 ECHO hello
+redis-benchmark -h localhost -p 7379 -c 100 -n 10000 SET test value
+redis-benchmark -h localhost -p 7379 -c 100 -n 10000 GET test
+redis-benchmark -h localhost -p 7379 -c 100 -n 10000 DEL test
 ```
 
 ## Current Status & Limitations
@@ -251,13 +281,14 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 ECHO hello
 ###  **Completed Features**
 - **High-Performance Server**: Epoll-based async I/O for production workloads
 - **Complete RESP Protocol**: All Redis data types (Simple Strings, Bulk Strings, Arrays, Integers, Errors)
-- **Redis Commands**: PING, ECHO, TIME, SET, GET, TTL with proper protocol compliance
-- **Key Expiration**: Support for EX parameter in SET command with automatic cleanup
+- **Redis Commands**: PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE with proper protocol compliance
+- **Key Expiration**: Support for EX parameter in SET command and EXPIRE command with automatic cleanup
+- **Key Management**: Delete keys and manage expiration times
 - **Concurrent Connections**: Support for simultaneous clients
 
 
 ###  **Current Limitations**
-- **Limited Commands**: Only 6 basic commands implemented (Redis has 200+ commands)
+- **Limited Commands**: Only 8 basic commands implemented (Redis has 200+ commands)
 - **No Persistence**: Data is not stored (in-memory only)
 - **No Data Structures**: No support for Lists, Sets, Hashes, etc.
 - **No Authentication**: No AUTH command or security features
@@ -269,9 +300,9 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 ECHO hello
 
 ### Phase 1: Core Redis Commands (In Progress)
 - [x] **String Commands**: SET, GET (completed)
-- [x] **Key Management**: TTL (completed)
-- [ ] **String Commands**: DEL, EXISTS, INCR, DECR
-- [ ] **Key Management**: EXPIRE, KEYS, TYPE
+- [x] **Key Management**: TTL, DEL, EXPIRE (completed)
+- [ ] **String Commands**: EXISTS, INCR, DECR
+- [ ] **Key Management**: KEYS, TYPE
 - [ ] **Database**: SELECT, FLUSHDB, FLUSHALL
 
 ### Phase 2: Advanced Data Structures
