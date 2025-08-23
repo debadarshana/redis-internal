@@ -4,6 +4,13 @@ A async TCP server implementation in Go that handles Redis RESP (Redis Serializa
 
 ## Features
 
+- **High-Performance Async Server**: Epoll-based event-driven architecture supporting 20,000+ concurrent connections
+- **Complete RESP Protocol Support**: Full Redis Serialization Protocol implementation
+- **Redis Command Compatibility**: Core Redis commands (PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE)
+- **Automatic Key Expiration**: Background auto-deletion of expired keys using Redis-compatible sampling algorithm
+- **Key Management**: Set expiration times and delete keys with proper cleanup
+- **Non-blocking I/O**: Efficient network operations with proper error handling
+
 
 
 ## Project Structure
@@ -13,6 +20,8 @@ redis-internal/
 ├── main.go                     # Entry point and CLI configuration
 ├── core/                       # Core Redis functionality
 │   ├── eval.go                # Command evaluation and response generation
+│   ├── expire.go              # Auto-deletion and key expiration management
+│   ├── store.go               # In-memory key-value store with expiration
 │   └── RESP.go                # Complete Redis RESP protocol parser
 ├── server/                     # Server implementations
 │   ├── aync_tcp.go           # High-performance async TCP server (epoll-based)
@@ -142,7 +151,32 @@ printf "*3\r\n\$6\r\nEXPIRE\r\n\$3\r\nkey\r\n\$2\r\n60\r\n" | nc localhost 7379
 5. **Respond**: Send formatted RESP responses back to clients
 6. **Monitor**: Real-time concurrent client tracking
 
+## Automatic Key Expiration
 
+### Redis-Compatible Auto-Deletion
+The server implements **automatic background expiration** using the same algorithm as Redis:
+
+1. **Sampling-Based Approach**: Every second, a sample of 20 keys with expiration is tested
+2. **Adaptive Deletion**: If more than 25% of sampled keys are expired, continue sampling and deleting
+3. **Efficient Cleanup**: Process stops when less than 25% of sampled keys are expired
+4. **Event-Loop Integration**: Auto-deletion runs in the main event loop with 1-second timeout
+5. **Zero Blocking**: Uses epoll timeout to ensure deletion runs even when server is idle
+
+### Implementation Details
+- **Frequency**: Runs every 1 second (configurable via `cronFreq` variable)
+- **Sample Size**: 20 keys per iteration (Redis-standard approach)
+- **Threshold**: 25% expired keys trigger additional cleanup cycles
+- **Integration**: Built into epoll event loop with 1000ms timeout
+- **Performance**: Non-blocking operation that doesn't affect client request handling
+
+### Benefits
+- ✅ **Memory Efficient**: Automatic cleanup prevents memory leaks from expired keys
+- ✅ **Redis Compatible**: Uses the same expiration algorithm as Redis
+- ✅ **Performance Optimized**: Sampling approach scales well with large datasets
+- ✅ **Always Active**: Runs continuously even when no clients are connected
+- ✅ **Non-Intrusive**: Doesn't block client operations or degrade performance
+- ✅ **Configurable**: Auto-deletion frequency can be adjusted via `cronFreq` variable
+- ✅ **Observable**: Logs cleanup statistics for monitoring and debugging
 
 ## Configuration Options
 
@@ -157,8 +191,10 @@ printf "*3\r\n\$6\r\nEXPIRE\r\n\$3\r\nkey\r\n\$2\r\n60\r\n" | nc localhost 7379
 # Terminal 1: Start async server
 $ go run main.go
 Starting the NiniDB server...
-2025/08/15 12:16:03 Starting Async TCP server on 127.0.0.1 7379
-2025/08/15 12:16:03 Server listening on 127.0.0.1:7379
+2025/08/23 21:20:47 Starting Async TCP server on 0.0.0.0 7379
+Deleted the expired Keys. total keys 0
+Deleted the expired Keys. total keys 0
+# Auto-deletion runs every second in background
 
 # Terminal 2: Connect with redis-cli
 $ redis-cli -h localhost -p 7379
@@ -219,9 +255,21 @@ localhost:7379> INVALID
 
 #### `core/eval.go`
 - Redis command evaluation and response generation
-- Command implementations: PING, ECHO, TIME
+- Command implementations: PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE
 - RESP encoding utilities for proper Redis responses
 - RedisCmd structure for parsed commands
+
+#### `core/expire.go`
+- Automatic key expiration and cleanup functionality
+- Redis-compatible sampling algorithm for efficient memory management
+- `DeleteExpireKeys()` function for background cleanup (called every second)
+- `expireSample()` function implementing 20-key sampling with 25% threshold
+- Integration with the main event loop for non-blocking operation
+
+#### `core/store.go`
+- In-memory key-value store with expiration support
+- Thread-safe operations for concurrent access
+- Expiration timestamp management and cleanup
 
 #### `core/RESP.go`
 - Complete RESP protocol parser for all data types
@@ -230,8 +278,9 @@ localhost:7379> INVALID
 - DecodeCmd for command extraction from RESP arrays
 
 #### `server/aync_tcp.go` (Production Server)
-- High-performance epoll-based async TCP server
+- High-performance epoll-based async TCP server with auto-deletion integration
 - Non-blocking I/O with FDConn wrapper for io.ReadWriter compatibility
+- Epoll timeout (1000ms) to ensure auto-deletion runs every second
 - Support for 20,000+ concurrent clients
 - SO_REUSEADDR, proper error handling, and resource cleanup
 
@@ -282,8 +331,10 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 DEL test
 - **High-Performance Server**: Epoll-based async I/O for production workloads
 - **Complete RESP Protocol**: All Redis data types (Simple Strings, Bulk Strings, Arrays, Integers, Errors)
 - **Redis Commands**: PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE with proper protocol compliance
-- **Key Expiration**: Support for EX parameter in SET command and EXPIRE command with automatic cleanup
-- **Key Management**: Delete keys and manage expiration times
+- **Automatic Key Expiration**: Redis-compatible background auto-deletion using sampling algorithm
+- **Key Management**: Set expiration times, delete keys, and automatic cleanup of expired keys
+- **Event-Loop Integration**: Auto-deletion runs every second within the main epoll event loop
+- **Memory Management**: Efficient cleanup prevents memory leaks from expired keys
 - **Concurrent Connections**: Support for simultaneous clients
 
 

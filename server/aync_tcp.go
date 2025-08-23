@@ -4,13 +4,19 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"redis-internal/core"
 	"syscall"
+	"time"
 )
 
 // FDConn wraps a file descriptor to implement io.ReadWriter
 type FDConn struct {
 	fd int
 }
+
+// Keeping some global variable to get the current time.
+var cronFreq time.Duration = 1 * time.Second // Auto deletion shpuld be called on every second
+var lastCronExecTime time.Time = time.Now()
 
 func (f *FDConn) Read(p []byte) (int, error) {
 	n, err := syscall.Read(f.fd, p)
@@ -143,12 +149,25 @@ func RunAsyncTCPServer(config Config) error {
 	/* Run the loop
 	It will accept the client and add the client to the epoll list */
 	for {
+
+		//Lets check if anything need tobe deleted (Auto Deletion )
+		if time.Now().After(lastCronExecTime.Add(cronFreq)) {
+			//if true , lets delete
+			core.DeleteExpireKeys()
+			//update the current time to last delete operation time
+			lastCronExecTime = time.Now()
+		}
 		/* check if any FD is ready for IO */
-		nevents, e := syscall.EpollWait(epollFD, events, -1)
+		// Use timeout of 1000ms (1 second) to ensure auto-deletion runs regularly
+		nevents, e := syscall.EpollWait(epollFD, events, 1000)
 		if e != nil {
 			log.Printf("EpollWait error: %v\n", e)
 			continue
 		}
+
+		// If nevents is 0, it means timeout occurred (no I/O events)
+		// This is normal and allows the loop to continue for auto-deletion
+
 		for i := 0; i < nevents; i++ {
 			//if the IO means for server socket , it is a new client connection
 			if int(events[i].Fd) == serverFD {
