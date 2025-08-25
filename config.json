@@ -1,0 +1,9 @@
+{
+  "host": "0.0.0.0",
+  "port": 7379,
+  "keysLimit": 5,
+  "evictionStrategy": "simple-first",
+  "autoDeleteFrequency": "1s",
+  "maxClients": 20000,
+  "logLevel": "info"
+}

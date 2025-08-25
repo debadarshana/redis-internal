@@ -8,8 +8,13 @@ import (
 )
 
 type Config struct {
-	Host string
-	Port int
+	Host                string
+	Port                int
+	KeysLimit           int
+	EvictionStrategy    string // Fixed typo: was EvictionStartegy
+	AutoDeleteFrequency string
+	MaxClients          int
+	LogLevel            string
 }
 
 func TcpEchoServer(config Config) {

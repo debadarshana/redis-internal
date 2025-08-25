@@ -52,10 +52,12 @@ func (f *FDConn) Write(p []byte) (int, error) {
 }
 
 func RunAsyncTCPServer(config Config) error {
-	log.Println("Starting Async TCP server on", config.Host, config.Port)
+	log.Printf("Starting Async TCP server on %s:%d", config.Host, config.Port)
+	log.Printf("Configuration: MaxClients=%d, KeysLimit=%d, EvictionStrategy=%s",
+		config.MaxClients, config.KeysLimit, config.EvictionStrategy)
 
-	//maximum clients to be accepted
-	max_clients := 20000
+	//maximum clients to be accepted from config
+	max_clients := config.MaxClients
 
 	var con_clients int = 0
 

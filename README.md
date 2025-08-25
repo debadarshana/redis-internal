@@ -8,7 +8,10 @@ A async TCP server implementation in Go that handles Redis RESP (Redis Serializa
 - **Complete RESP Protocol Support**: Full Redis Serialization Protocol implementation
 - **Redis Command Compatibility**: Core Redis commands (PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE)
 - **Automatic Key Expiration**: Background auto-deletion of expired keys using Redis-compatible sampling algorithm
-- **Key Management**: Set expiration times and delete keys with proper cleanup
+- **Memory Management**: Configurable key limits with automatic eviction when limits are reached
+- **Flexible Configuration**: JSON config file with command-line overrides for all settings
+- **Key Eviction Strategies**: Multiple eviction policies (simple-first, future: LRU, random)
+- **Production Ready**: Comprehensive validation, error handling, and logging
 - **Non-blocking I/O**: Efficient network operations with proper error handling
 
 
@@ -18,8 +21,12 @@ A async TCP server implementation in Go that handles Redis RESP (Redis Serializa
 ```
 redis-internal/
 ├── main.go                     # Entry point and CLI configuration
+├── config.json                 # Configuration file with server settings
+├── config/                     # Configuration management
+│   └── config.go              # Config loading, validation, and CLI flag handling
 ├── core/                       # Core Redis functionality
 │   ├── eval.go                # Command evaluation and response generation
+│   ├── eviction.go            # Key eviction strategies and memory management
 │   ├── expire.go              # Auto-deletion and key expiration management
 │   ├── store.go               # In-memory key-value store with expiration
 │   └── RESP.go                # Complete Redis RESP protocol parser
@@ -49,16 +56,116 @@ go build -o redis-internal
 go run main.go
 ```
 
+## Configuration
+
+### Configuration File (`config.json`)
+
+Redis Internal uses a JSON configuration file for server settings. The default `config.json` contains:
+
+```json
+{
+  "host": "0.0.0.0",
+  "port": 7379,
+  "keysLimit": 5,
+  "evictionStrategy": "simple-first",
+  "autoDeleteFrequency": "1s",
+  "maxClients": 20000,
+  "logLevel": "info"
+}
+```
+
+### Configuration Options
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `host` | string | `"0.0.0.0"` | Host address to bind server (0.0.0.0 for all interfaces) |
+| `port` | int | `7379` | Port number for the server (Redis standard) |
+| `keysLimit` | int | `1000` | Maximum number of keys before eviction is triggered |
+| `evictionStrategy` | string | `"simple-first"` | Strategy for key eviction (`simple-first`, `lru`, `random`) |
+| `autoDeleteFrequency` | string | `"1s"` | How often to run auto-deletion of expired keys |
+| `maxClients` | int | `20000` | Maximum number of concurrent client connections |
+| `logLevel` | string | `"info"` | Logging level (`debug`, `info`, `warn`, `error`) |
+
+### Command Line Overrides
+
+Any configuration setting can be overridden via command line flags:
+
+```bash
+# Override individual settings
+./redis-internal --host=127.0.0.1 --port=8080
+./redis-internal --keys-limit=100 --eviction=simple-first
+./redis-internal --max-clients=50000 --log-level=debug
+
+# Use different config file
+./redis-internal --config=production-config.json
+
+# Combine config file with overrides
+./redis-internal --config=base-config.json --keys-limit=500
+```
+
+### Memory Management & Eviction
+
+#### Key Limit Enforcement
+- When `keysLimit` is reached, the eviction strategy is triggered
+- Only applies when adding **new** keys (updates to existing keys don't trigger eviction)
+- Eviction removes one key before adding the new key
+
+#### Eviction Strategies
+- **`simple-first`**: Removes the first key encountered in the map iteration
+- **`lru`**: *(Future)* Least Recently Used eviction
+- **`random`**: *(Future)* Random key eviction
+
+#### Example Eviction Behavior
+```bash
+# Set key limit to 3
+./redis-internal --keys-limit=3
+
+# In redis-cli:
+SET key1 "value1"  # OK - 1 key
+SET key2 "value2"  # OK - 2 keys  
+SET key3 "value3"  # OK - 3 keys (limit reached)
+SET key4 "value4"  # OK - evicts key1, stores key4 (still 3 keys)
+```
+
 ## Usage
 
 ### Starting the Server
 
 ```bash
-# Default configuration (host: 0.0.0.0, port: 7379)
-go run main.go
+# Use default config.json settings
+./redis-internal
 
-# Custom host and port
-go run main.go --host=localhost --port=8080
+# Override specific settings
+./redis-internal --host=127.0.0.1 --port=8080 --keys-limit=100
+
+# Use custom config file
+./redis-internal --config=my-config.json
+
+# Development mode with debug logging
+./redis-internal --log-level=debug --keys-limit=10
+
+# Production mode with high limits
+./redis-internal --keys-limit=10000 --max-clients=50000
+```
+
+### Server Output
+```bash
+$ ./redis-internal --keys-limit=5
+Starting the Redis Internal server...
+Loaded configuration from config.json
+=== Redis Internal Configuration ===
+Host: 0.0.0.0
+Port: 7379
+Keys Limit: 5
+Eviction Strategy: simple-first
+Auto Delete Frequency: 1s
+Max Clients: 20000
+Log Level: info
+===================================
+2025/08/25 21:43:10 Starting Async TCP server on 0.0.0.0:7379
+2025/08/25 21:43:10 Configuration: MaxClients=20000, KeysLimit=5, EvictionStrategy=simple-first
+2025/08/25 21:43:11 Deleted the expired Keys. total keys  0
+```
 
 
 ```
@@ -249,15 +356,29 @@ localhost:7379> INVALID
 ### Code Architecture
 
 #### `main.go`
-- Command-line flag parsing with default Redis port (7379)
-- Server configuration setup
+- Configuration loading and validation with `config.LoadConfig()`
+- Store initialization with memory limits and eviction strategy
 - Application entry point with async server initialization
+- Error handling and graceful shutdown
+
+#### `config/config.go`
+- JSON configuration file parsing and validation
+- Command-line flag definitions and override handling
+- Configuration validation (port ranges, limits, strategies)
+- Default configuration values and help text
+- Support for custom config file paths
 
 #### `core/eval.go`
 - Redis command evaluation and response generation
 - Command implementations: PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE
 - RESP encoding utilities for proper Redis responses
 - RedisCmd structure for parsed commands
+
+#### `core/eviction.go`
+- Key eviction strategies for memory management
+- `Evict()` function with strategy selection (simple-first, future: LRU, random)
+- `evictFirst()` implementation for simple-first strategy
+- Debug logging for eviction monitoring and troubleshooting
 
 #### `core/expire.go`
 - Automatic key expiration and cleanup functionality
@@ -267,9 +388,11 @@ localhost:7379> INVALID
 - Integration with the main event loop for non-blocking operation
 
 #### `core/store.go`
-- In-memory key-value store with expiration support
-- Thread-safe operations for concurrent access
+- In-memory key-value store with expiration and eviction support
+- Configuration-aware memory limit enforcement
+- `Put()` function with automatic eviction when limits exceeded
 - Expiration timestamp management and cleanup
+- Debug logging for store operations and key management
 
 #### `core/RESP.go`
 - Complete RESP protocol parser for all data types
@@ -331,11 +454,15 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 DEL test
 - **High-Performance Server**: Epoll-based async I/O for production workloads
 - **Complete RESP Protocol**: All Redis data types (Simple Strings, Bulk Strings, Arrays, Integers, Errors)
 - **Redis Commands**: PING, ECHO, TIME, SET, GET, TTL, DEL, EXPIRE with proper protocol compliance
+- **Flexible Configuration**: JSON config file with command-line overrides for all settings
+- **Memory Management**: Configurable key limits with automatic eviction strategies
+- **Key Eviction**: Simple-first eviction strategy with future support for LRU and random
 - **Automatic Key Expiration**: Redis-compatible background auto-deletion using sampling algorithm
-- **Key Management**: Set expiration times, delete keys, and automatic cleanup of expired keys
+- **Configuration Validation**: Comprehensive validation of all configuration parameters
 - **Event-Loop Integration**: Auto-deletion runs every second within the main epoll event loop
-- **Memory Management**: Efficient cleanup prevents memory leaks from expired keys
-- **Concurrent Connections**: Support for simultaneous clients
+- **Debug Logging**: Detailed logging for troubleshooting eviction and store operations
+- **Production Ready**: Error handling, graceful configuration, and robust architecture
+- **Concurrent Connections**: Support for simultaneous clients with configurable limits
 
 
 ###  **Current Limitations**
@@ -352,6 +479,8 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 DEL test
 ### Phase 1: Core Redis Commands (In Progress)
 - [x] **String Commands**: SET, GET (completed)
 - [x] **Key Management**: TTL, DEL, EXPIRE (completed)
+- [x] **Memory Management**: Key limits and eviction strategies (completed)
+- [x] **Configuration System**: JSON config with CLI overrides (completed)
 - [ ] **String Commands**: EXISTS, INCR, DECR
 - [ ] **Key Management**: KEYS, TYPE
 - [ ] **Database**: SELECT, FLUSHDB, FLUSHALL
@@ -364,7 +493,7 @@ redis-benchmark -h localhost -p 7379 -c 100 -n 10000 DEL test
 
 ### Phase 3: Production Features
 - [ ] **Persistence**: RDB snapshots and AOF logging
-- [ ] **Configuration**: Redis-compatible config file support
+- [ ] **Advanced Eviction**: LRU, LFU, and TTL-based eviction strategies
 - [ ] **Authentication**: AUTH command and user management
 - [ ] **Monitoring**: INFO command and metrics
 
